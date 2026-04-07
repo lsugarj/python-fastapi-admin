@@ -6,11 +6,10 @@ from app.exceptions.business import BusinessException
 from app.models.rbac import User
 from app.repositorys.user_repo import UserRepository
 from app.schemas.common import PageResult, IDResult, BoolResult
-from app.schemas.user import UserCreate, UserUpdate, UserRead, UserPageQueryParams, UserList, UserPage
+from app.schemas.user import UserCreate, UserUpdate, UserRead, UserPageQueryParams, UserList, UserPage, CurrentUser
 from app.exceptions.business import AuthException
 from app.core.security import verify_password, create_access_token
-from app.schemas.user import UserLogin, CurrentUser, Token
-from app.utils.redis_cache import redis_cache
+from app.schemas.user import UserLogin
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -19,18 +18,35 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class UserService:
 
     @staticmethod
-    async def login(data: UserLogin, session: AsyncSession) -> Token:
+    async def login(data: UserLogin, session: AsyncSession):
         user = await UserRepository.get_user_for_login(data.username, session)
         if not user or not verify_password(data.password, user.password):
             raise AuthException(Code.LOGIN_FAILED, "用户名或密码错误")
         if not user.is_active:
             raise AuthException(Code.LOGIN_FAILED, "用户被禁用，请联系管理员")
-        token = create_access_token({"sub": user.id})
-        return Token(token=token)
+        # 单点登录核心
+        token_version = user.token_version + 1
+        is_success = await UserRepository.update_user_token_version(user.id, token_version, session)
+        if not is_success:
+            raise AuthException(Code.LOGIN_FAILED, "登陆失败，请联系管理员或稍后重试")
+        token = create_access_token({"sub": user.id}, token_version)
+        return user.id, token
 
 
     @staticmethod
-    @redis_cache(model=CurrentUser, key_builder=lambda user_id, session=None: f"user:info:{user_id}", expire=300)
+    async def logout(user_id: int, session: AsyncSession) -> BoolResult:
+        # 修改token version + 1
+        user = await UserRepository.get_user_by_id(user_id, session)
+        if not user:
+            raise AuthException(Code.LOGOUT_FAILED, "操作失败，请联系管理员或稍后重试")
+        # 单点登录核心
+        token_version = user.token_version + 1
+        is_success = UserRepository.update_user_token_version(user_id, token_version, session)
+        if not is_success:
+            raise AuthException(Code.LOGIN_FAILED, "操作失败，请联系管理员或稍后重试")
+        return BoolResult(success=True)
+
+    @staticmethod
     async def get_current_user(user_id: int, session: AsyncSession) -> CurrentUser | None:
         user = await UserRepository.get_current_user(user_id, session)
         if not user:
@@ -40,6 +56,7 @@ class UserService:
             username=user.username,
             email=user.email,
             phone=user.phone,
+            token_version=user.token_version,
             roles=[r.name for r in user.roles]
         )
         return data

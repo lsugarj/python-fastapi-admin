@@ -107,7 +107,7 @@ JWT 的生成/解析在：
 日志初始化在应用启动时自动完成（见 `lifespan`），一般业务代码这样打日志：
 
 ```python
-from app.core.logger import logger
+from app.core.logging import logger
 
 logger.info("创建用户 user_id=%s", user_id)
 logger.warning("权限不足")

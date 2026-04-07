@@ -1,7 +1,7 @@
-from typing import Generic, TypeVar, List, Any
+from typing import Generic, TypeVar, Any
 from pydantic.generics import GenericModel
 from pydantic import BaseModel
-from app.utils.context import get_trace_id
+from app.core.context import get_trace_id
 
 T = TypeVar("T")
 

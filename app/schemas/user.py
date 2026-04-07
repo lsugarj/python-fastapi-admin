@@ -16,6 +16,7 @@ class CurrentUser(ResponseBaseModel):
     username: str
     email: str
     phone: str
+    token_version: int
     roles: list[str]
 
 class UserCreate(RequestBaseModel):

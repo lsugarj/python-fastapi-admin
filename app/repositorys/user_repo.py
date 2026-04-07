@@ -61,6 +61,23 @@ class UserRepository:
 
 
     @staticmethod
+    async def update_user_token_version(user_id: int, token_version: int, session: AsyncSession) -> bool:
+        """
+       返回：
+       True  → 更新成功
+       False → 没有匹配行（可能不存在 or 值相同）
+       """
+        stmt = (
+            update(User)
+            .where(User.id == user_id)
+            .values(token_version=token_version)
+        )
+        result = await session.execute(stmt)
+        await session.commit()
+        return result.rowcount > 0
+
+
+    @staticmethod
     async def delete_user(user_id: int, session: AsyncSession) -> bool:
         """
        返回：
@@ -75,6 +92,7 @@ class UserRepository:
         result = await session.execute(stmt)
         await session.commit()
         return result.rowcount > 0
+
 
     @staticmethod
     async def exists(user_id: int, session: AsyncSession) -> bool:

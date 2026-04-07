@@ -1,35 +1,100 @@
 from datetime import datetime, timedelta, UTC
+from typing import Any, Dict
+
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+
 from app.core.config import get_settings
 
+# =========================
+# 密码加密
+# =========================
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 验证密码
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-# 密码加密
-def hash_password(password: str):
+
+def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-# 生成 JWT
-def create_access_token(data: dict):
-    secret_config = get_settings().secret
-    to_encode = data.copy()
-    if "sub" in to_encode and to_encode["sub"] is not None and not isinstance(to_encode["sub"], str):
-        to_encode["sub"] = str(to_encode["sub"])
-    expire = datetime.now(UTC) + timedelta(minutes=secret_config.access_token_expires)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, secret_config.secret_key, algorithm=secret_config.algorithm)
 
-# 解析 JWT
-def decode_token(token: str):
-    secret_config = get_settings().secret
+# =========================
+# JWT 工具
+# =========================
+def _validate_and_normalize_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    生产级 payload 校验：
+    - sub 必须存在
+    - sub 不允许为 None
+    - sub 必须是字符串
+    """
+    to_encode = data.copy()
+
+    sub = to_encode.get("sub")
+
+    # 强约束（推荐）
+    if sub is None:
+        raise ValueError("JWT payload must contain 'sub' and cannot be None")
+
+    # 统一转字符串（JWT规范推荐）
+    if not isinstance(sub, str):
+        to_encode["sub"] = str(sub)
+
+    return to_encode
+
+
+# =========================
+# 生成 access_token
+# =========================
+def create_access_token(
+    data: Dict[str, Any],
+    token_version: int,
+) -> str:
+    settings = get_settings().secret
+
+    to_encode = _validate_and_normalize_payload(data)
+
+    now = datetime.now(UTC)
+    expire = now + timedelta(minutes=settings.access_token_expires)
+
+    # 标准字段
+    to_encode.update({
+        "iat": int(now.timestamp()),       # 签发时间
+        "exp": int(expire.timestamp()),   # 过期时间
+        "type": "access",                 # token类型（预留扩展）
+        "ver": token_version,             # 单点登录核心
+    })
+
+    return jwt.encode(
+        to_encode,
+        settings.secret_key,
+        algorithm=settings.algorithm
+    )
+
+
+# =========================
+# 解析 token
+# =========================
+def decode_token(token: str) -> Dict[str, Any] | None:
+    settings = get_settings().secret
+
     try:
-        return jwt.decode(
-            token, secret_config.secret_key, algorithms=[secret_config.algorithm]
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
         )
+
+        # 基础字段校验（防御性编程）
+        if "sub" not in payload or payload["sub"] is None:
+            return None
+
+        return payload
+
     except JWTError:
         return None

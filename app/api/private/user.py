@@ -1,9 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_session, get_read_session
-from app.core.deps import get_current_user
-from app.core.response import ResponseModel, Response
+from app.db.session import get_session, get_read_session
+from app.api.deps import get_current_user, delete_current_user_cache
+from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
 from app.schemas.user import UserCreate, UserRead, UserPageQueryParams, UserList, UserUpdate, CurrentUser, UserPage
 from app.services.user_service import UserService
@@ -11,6 +11,17 @@ from fastapi import Request
 
 
 router = APIRouter(prefix="/private/users", dependencies=[Depends(get_current_user)])
+
+
+@router.post("/logout", response_model=ResponseModel[BoolResult])
+async def logout(
+    user: CurrentUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    data = await UserService.logout(user.id, session)
+    # 删除旧缓存
+    await delete_current_user_cache(user.id)
+    return Response.success(data=data, message="Logout success")
 
 
 @router.post("", response_model=ResponseModel[IDResult])

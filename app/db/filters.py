@@ -1,6 +1,6 @@
 from sqlalchemy.orm import with_loader_criteria, Session
 from sqlalchemy import event
-from app.models.base import SoftDeleteMixin
+from app.db.base import SoftDeleteMixin
 
 
 @event.listens_for(Session, "do_orm_execute")  # ⭐ 注意这里！

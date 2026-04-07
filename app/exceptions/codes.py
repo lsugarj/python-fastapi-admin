@@ -9,6 +9,7 @@ class Code:
     # 401相关
     NO_LOGIN = 40100
     LOGIN_FAILED = 40102  # 用户名或密码错误（统一）
+    LOGOUT_FAILED = 40103  # 登出失败
     # 403相关
     NO_PERMISSION = 40300  # 未登录或无权限
     USER_DISABLED = 40301  # 用户被禁用

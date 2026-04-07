@@ -1,20 +1,26 @@
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.api.public.user import router as public_user_router
 from app.api.private.user import router as private_user_router
 from app.api.private.permission import router as private_permission_router
-from app.core.database import init_engine, close_engine
+from app.db.session import init_engine, close_engine
+from app.core.tracing import init_tracer
 from app.core.redis import RedisClient
 from app.exceptions.handlers import register_exception_handlers
-from app.core.logger import setup_logger, logger
+from app.core.logging import init_logging, get_logger
+from app.middlewares.metrics import metrics_middleware
 from app.middlewares.trace import trace_middleware
 from app.middlewares.logging import logging_middleware
+from fastapi import FastAPI
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
 
+
+init_logging()
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ===== 启动阶段 =====
-    setup_logger()
     logger.info("日志初始化成功")
     await init_engine()
     logger.info("数据库初始化成功")
@@ -30,7 +36,10 @@ async def lifespan(app: FastAPI):
     logger.info("redis关闭成功")
 
 app = FastAPI(lifespan=lifespan)
-# 顺序非常关键（谁先执行）
+# 初始化 OpenTelemetry
+init_tracer(app)
+# 注册middleware
+app.middleware("http")(metrics_middleware)
 app.middleware("http")(logging_middleware)
 app.middleware("http")(trace_middleware)
 # 注册异常处理
@@ -44,3 +53,7 @@ app.include_router(private_permission_router, prefix="/api")
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

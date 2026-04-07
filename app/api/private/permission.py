@@ -1,9 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_session, get_read_session
-from app.core.deps import get_current_user
-from app.core.response import ResponseModel, Response
+from app.db.session import get_session, get_read_session
+from app.api.deps import get_current_user
+from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
 from app.schemas.permission import PermissionCreate, PermissionPageQueryParams, PermissionUpdate, PermissionPage, \
     PermissionList, PermissionRead

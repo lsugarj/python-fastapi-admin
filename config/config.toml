@@ -26,9 +26,11 @@ host = "localhost"
 port = 6379
 db = 0
 
-[logger]
+[opentelemetry]
+otel_exporter_endpoint="http://localhost:4317"
+
+[logging]
 dir = "logs"
-file = "app.log"
 level = "INFO"
-rotation = "50 MB" # 50 MB，用整数字节表示
-retention = 30 # 保留最近30个日志文件
+max_bytes = "50MB" # 如10KB / 50MB / 1GB
+backup_count = 30 # 保留最近30个日志文件

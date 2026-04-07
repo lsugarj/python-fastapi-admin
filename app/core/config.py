@@ -11,6 +11,10 @@ class AppConfig(BaseModel):
     host: str
     port: int
 
+class SecretConfig(BaseModel):
+    secret_key: str
+    algorithm: str
+    access_token_expires: int
 
 class DatabaseConfig(BaseModel):
     user: str
@@ -39,24 +43,22 @@ class RedisConfig(BaseModel):
     port: int
     db: int
 
-class LoggerConfig(BaseModel):
+class LoggingConfig(BaseModel):
     dir: str
-    file: str
     level: str
-    rotation: str
-    retention: int
+    max_bytes: str
+    backup_count: int
 
-class SecretConfig(BaseModel):
-    secret_key: str
-    algorithm: str
-    access_token_expires: int
+class OpentelemetryConfig(BaseModel):
+    otel_exporter_endpoint: str
 
 class Settings(BaseModel):
     app: AppConfig
+    secret: SecretConfig
     database: DatabaseConfig
     redis: RedisConfig
-    logger: LoggerConfig
-    secret: SecretConfig
+    logging: LoggingConfig
+    opentelemetry: OpentelemetryConfig
 
 
 def load_config() -> Dict[str, Any]:

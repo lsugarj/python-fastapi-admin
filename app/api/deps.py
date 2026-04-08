@@ -75,17 +75,16 @@ async def get_current_user(
 
 
 # =========================
-# RBAC：角色控制，调用require_role("admin")
+# RBAC：角色控制，调用require_role("admin", "super_admin")
 # =========================
-def require_role(role: str):
+def require_role(*roles: str):
     def checker(user: CurrentUser = Depends(get_current_user)):
-        if role not in user.roles:
+        if not any(role in user.roles for role in roles):
             raise HTTPException(
                 status_code=403,
-                detail=f"需要角色: {role}",
+                detail=f"需要角色: {roles}",
             )
         return user
-
     return checker
 
 

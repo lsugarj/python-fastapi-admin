@@ -57,7 +57,7 @@ class UserService:
             email=user.email,
             phone=user.phone,
             token_version=user.token_version,
-            roles=[r.name for r in user.roles]
+            roles=[r.code for r in user.roles]
         )
         return data
 
@@ -88,8 +88,8 @@ class UserService:
         exists = await UserRepository.exists(user_id, session)
         if not exists:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        # 存在但没更新（值相同）→ 幂等成功
-        return BoolResult(success=True)
+        # 存在但没更新成功
+        return BoolResult(success=False)
 
 
     @staticmethod
@@ -103,8 +103,8 @@ class UserService:
         exists = await UserRepository.exists(user_id, session)
         if not exists:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        # 存在但没更新（值相同）→ 幂等成功
-        return BoolResult(success=True)
+        # 存在但没删除成功
+        return BoolResult(success=False)
 
 
     @staticmethod

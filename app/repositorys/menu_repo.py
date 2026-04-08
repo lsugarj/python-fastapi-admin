@@ -1,58 +1,58 @@
-from datetime import UTC, datetime
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, delete
-from app.models.rbac import Permission
-from app.schemas.permission import PermissionPageQueryParams
+from sqlalchemy.orm import selectinload
+
+from app.models.rbac import Menu
+from app.schemas.menu import MenuPageQueryParams
 
 
-class PermissionRepository:
+class MenuRepository:
 
     @staticmethod
-    async def create_permission(permission: Permission, session: AsyncSession) -> int:
-        session.add(permission)
+    async def create_menu(menu: Menu, session: AsyncSession) -> int:
+        session.add(menu)
         await session.flush()
-        return permission.id
+        return menu.id
 
     @staticmethod
-    async def update_permission(permission_id: int, update_data: dict, session: AsyncSession) -> bool:
+    async def update_menu(menu_id: int, update_data: dict, session: AsyncSession) -> bool:
         """
         返回：
         True  → 更新成功
         False → 没有匹配行（可能不存在 or 值相同）
         """
         stmt = (
-            update(Permission)
-            .where(Permission.id == permission_id)
+            update(Menu)
+            .where(Menu.id == menu_id)
             .values(**update_data)
         )
         result = await session.execute(stmt)
         return result.rowcount > 0
 
     @staticmethod
-    async def delete_permission(permission_id: int, session: AsyncSession) -> bool:
+    async def delete_menu(menu_id: int, session: AsyncSession) -> bool:
         """
        返回：
        True  → 更新成功
        False → 没有匹配行（可能不存在 or 值相同）
        """
         stmt = (
-            update(Permission)
-            .where(Permission.id == permission_id)
-            .values(deleted_at=datetime.now(UTC))
+            delete(Menu)
+            .where(Menu.id == menu_id)
         )
         result = await session.execute(stmt)
         return result.rowcount > 0
 
 
     @staticmethod
-    async def exists(permission_id: int, session: AsyncSession) -> bool:
+    async def exists(menu_id: int, session: AsyncSession) -> bool:
         """
         判断用户是否存在（未删除）
         """
         stmt = (
-            select(Permission.id)
-            .where(Permission.id == permission_id).limit(1)
+            select(Menu.id)
+            .where(Menu.id == menu_id).limit(1)
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none() is not None
@@ -63,44 +63,46 @@ class PermissionRepository:
         判断用户是否存在（未删除）
         """
         stmt = (
-            select(Permission.id)
-            .where(Permission.code == code).limit(1)
+            select(Menu.id)
+            .where(Menu.code == code).limit(1)
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
 
     @staticmethod
-    async def get_permission_by_id(id: int, session: AsyncSession) -> Permission | None:
-        stmt = select(Permission).where(Permission.id == id)
+    async def get_menu_by_id(menu_id: int, session: AsyncSession) -> Menu | None:
+        stmt = (select(Menu)
+                .options(selectinload(Menu.permission))
+                .where(Menu.id == menu_id))
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
 
     @staticmethod
-    async def get_permission_list(session: AsyncSession) -> List[Permission]:
-        stmt = select(Permission)
+    async def get_menu_list(session: AsyncSession) -> List[Menu]:
+        stmt = select(Menu)
         result = await session.execute(stmt)
         return result.scalars().all()
 
 
     @staticmethod
-    async def get_permission_page(params: PermissionPageQueryParams, session: AsyncSession):
-        stmt = select(Permission)
+    async def get_menu_page(params: MenuPageQueryParams, session: AsyncSession):
+        stmt = select(Menu)
 
         # 动态条件
         if params.name:
-            stmt = stmt.where(Permission.name.contains(params.name))
+            stmt = stmt.where(Menu.name.contains(params.name))
         if params.path:
-            stmt = stmt.where(Permission.path.contains(params.path))
+            stmt = stmt.where(Menu.path.contains(params.path))
 
         # ===== 总数 =====
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await session.execute(count_stmt)).scalar_one()
 
         # ===== 分页 =====
-        query_stmt = stmt.offset(params.offset).limit(params.size)
+        query_stmt = stmt.options(selectinload(Menu.permission)).offset(params.offset).limit(params.size)
         result = await session.execute(query_stmt)
-        permissions = result.scalars().all()
+        menus = result.scalars().all()
 
-        return total, permissions
+        return total, menus

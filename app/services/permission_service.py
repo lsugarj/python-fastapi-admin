@@ -16,9 +16,9 @@ class PermissionService:
         existing = await PermissionRepository.exists_by_code(data.code, session)
         if existing:
             raise BusinessException(Code.PERMISSION_ALREADY_EXISTS, "Code已经存在")
-        permission = Permission(code=data.code, name=data.name)
-        id = await PermissionRepository.create_permission(permission, session)
-        return IDResult(id=id)
+        permission = Permission(code=data.code, name=data.name, path=data.path, method=data.method)
+        permission_id = await PermissionRepository.create_permission(permission, session)
+        return IDResult(id=permission_id)
 
 
     @staticmethod
@@ -36,23 +36,23 @@ class PermissionService:
         exists = await PermissionRepository.exists(permission_id, session)
         if not exists:
             raise BusinessException(Code.PERMISSION_NOT_FOUND, "数据不存在")
-        # 存在但没更新（值相同）→ 幂等成功
-        return BoolResult(success=True)
+        # 存在但没更新成功
+        return BoolResult(success=False)
 
 
     @staticmethod
     async def delete_permission(permission_id: int, session: AsyncSession) -> BoolResult:
-        # 直接 UPDATE
+        # 直接删除
         is_success = await PermissionRepository.delete_permission(permission_id, session)
-        # 如果更新成功
+        # 如果删除成功
         if is_success:
             return BoolResult(success=True)
         # 失败 → 补查（区分不存在 vs 幂等）
         exists = await PermissionRepository.exists(permission_id, session)
         if not exists:
             raise BusinessException(Code.PERMISSION_NOT_FOUND, "数据不存在")
-        # 存在但没更新（值相同）→ 幂等成功
-        return BoolResult(success=True)
+        # 存在但没删除成功
+        return BoolResult(success=False)
 
 
     @staticmethod

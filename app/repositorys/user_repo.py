@@ -3,7 +3,6 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, delete, insert
 from sqlalchemy.orm import selectinload
-
 from app.models.rbac import User, UserRole
 from app.schemas.user import UserPageQueryParams
 
@@ -24,7 +23,6 @@ class UserRepository:
                     for role_id in role_ids
                 ]
             )
-        # 不需要手动 commit（begin 会自动提交）
         return user.id
 
     @staticmethod
@@ -53,8 +51,8 @@ class UserRepository:
             await session.execute(
                 insert(UserRole),
                 [
-                    {"user_id": user_id, "role_id": rid}
-                    for rid in role_ids
+                    {"user_id": user_id, "role_id": role_id}
+                    for role_id in role_ids
                 ]
             )
         return True
@@ -73,7 +71,6 @@ class UserRepository:
             .values(token_version=token_version)
         )
         result = await session.execute(stmt)
-        await session.commit()
         return result.rowcount > 0
 
 
@@ -90,7 +87,6 @@ class UserRepository:
             .values(deleted_at=datetime.now(UTC))
         )
         result = await session.execute(stmt)
-        await session.commit()
         return result.rowcount > 0
 
 
@@ -137,7 +133,9 @@ class UserRepository:
 
     @staticmethod
     async def get_user_by_id(user_id: int, session: AsyncSession) -> User | None:
-        stmt = select(User).where(User.id == user_id)
+        stmt = (select(User)
+                .options(selectinload(User.roles))
+                .where(User.id == user_id))
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 

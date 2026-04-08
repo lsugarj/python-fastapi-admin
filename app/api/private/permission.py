@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_session, get_read_session
-from app.api.deps import get_current_user
+from app.api.deps import require_role
 from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
 from app.schemas.permission import PermissionCreate, PermissionPageQueryParams, PermissionUpdate, PermissionPage, \
@@ -10,7 +10,7 @@ from app.schemas.permission import PermissionCreate, PermissionPageQueryParams, 
 from app.services.permission_service import PermissionService
 
 
-router = APIRouter(prefix="/private/permissions", dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/private/permissions", dependencies=[Depends(require_role("admin"))])
 
 
 @router.post("", response_model=ResponseModel[IDResult])
@@ -33,7 +33,7 @@ async def update_permission(
 
 
 @router.delete("/detail/{permission_id}", response_model=ResponseModel[BoolResult])
-async def get_permission_by_id(
+async def delete_permission(
     permission_id: int,
     session: AsyncSession = Depends(get_session),
 ):

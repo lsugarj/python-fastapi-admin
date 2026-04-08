@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from app.api.public.user import router as public_user_router
 from app.api.private.user import router as private_user_router
+from app.api.private.role import router as private_role_router
 from app.api.private.permission import router as private_permission_router
+from app.api.private.menu import router as private_menu_router
 from app.db.session import init_engine, close_engine
 from app.core.tracing import init_tracer
 from app.core.redis import RedisClient
@@ -47,7 +49,9 @@ register_exception_handlers(app)
 # 注册路由
 app.include_router(public_user_router, prefix="/api")
 app.include_router(private_user_router, prefix="/api")
+app.include_router(private_role_router, prefix="/api")
 app.include_router(private_permission_router, prefix="/api")
+app.include_router(private_menu_router, prefix="/api")
 
 
 @app.get("/healthz")

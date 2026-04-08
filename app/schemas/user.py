@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import EmailStr, computed_field, ConfigDict
 from app.schemas.common import PageParamsRequestBaseModel, RequestBaseModel, ResponseBaseModel
-from app.schemas.role import RoleRead
+from app.schemas.role import RoleRead, RoleList
 
 
 class UserLogin(RequestBaseModel):
@@ -17,6 +17,7 @@ class CurrentUser(ResponseBaseModel):
     email: str
     phone: str
     token_version: int
+    is_active: bool | None = True
     roles: list[str]
 
 class UserCreate(RequestBaseModel):
@@ -35,19 +36,17 @@ class UserUpdate(RequestBaseModel):
 class UserList(ResponseBaseModel):
     id: int
     username: str
-    email: str
 
-class UserRead(ResponseBaseModel):
-    id: int
-    username: str
+class UserRead(UserList):
     email: str
     phone: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    roles: list[RoleList]
 
 class UserPage(UserRead):
-    roles: list[RoleRead]
+    pass
 
 class UserPageQueryParams(PageParamsRequestBaseModel):
     username: str | None = None

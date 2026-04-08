@@ -24,6 +24,11 @@ async def logout(
     return Response.success(data=data, message="Logout success")
 
 
+@router.get("/me", response_model=ResponseModel[CurrentUser])
+async def get_me(request: Request):
+    return Response.success(data=request.state.user)
+
+
 @router.post("", response_model=ResponseModel[IDResult])
 async def create_user(
     params: UserCreate,
@@ -44,7 +49,7 @@ async def update_user(
 
 
 @router.delete("/detail/{user_id}", response_model=ResponseModel[BoolResult])
-async def get_user_by_id(
+async def delete_user(
     user_id: int,
     session: AsyncSession = Depends(get_session),
 ):
@@ -59,11 +64,6 @@ async def get_user_by_id(
 ):
     data = await UserService.get_user_by_id(user_id, session)
     return Response.success(data=data)
-
-
-@router.get("/me", response_model=ResponseModel[CurrentUser])
-async def get_me(request: Request):
-    return Response.success(data=request.state.user)
 
 
 @router.get("/list", response_model=ResponseModel[List[UserList]])

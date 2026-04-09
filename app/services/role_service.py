@@ -2,10 +2,10 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions.codes import Code
 from app.exceptions.business import BusinessException
-from app.models.rbac import Role
+from app.mappers.role_mapper import RoleMapper
 from app.repositorys.role_repo import RoleRepository
 from app.schemas.common import PageResult, IDResult, BoolResult
-from app.schemas.role import RolePageQueryParams, RolePage, RoleList, RoleRead, RoleCreate, RoleUpdate
+from app.schemas.role import RolePageQueryParams, RoleList, RoleRead, RoleCreate, RoleUpdate
 
 
 class RoleService:
@@ -14,68 +14,57 @@ class RoleService:
     async def create_role(data: RoleCreate, session: AsyncSession) -> IDResult:
         existing = await RoleRepository.exists_by_code(data.code, session)
         if existing:
-            raise BusinessException(Code.ROLE_ALREADY_EXISTS, "Code已经存在")
-        role = Role(code=data.code, name=data.name)
-        role_id = await RoleRepository.create_role(role, data.menu_ids, session)
+            raise BusinessException(Code.ROLE_ALREADY_EXISTS, "角色Code已经存在")
+        role = RoleMapper.to_create_entity(data)
+        role_id = await RoleRepository.create_role(role, data.permission_ids, session)
         return IDResult(id=role_id)
 
 
     @staticmethod
     async def update_role(role_id: int, data: RoleUpdate, session: AsyncSession) -> BoolResult:
-        # 提取更新字段
-        update_data = data.model_dump(exclude_unset=True, exclude={"menu_ids"})
+        # DTO → update dict
+        update_data = RoleMapper.to_update_dict(data)
         if not update_data:
             return BoolResult(success=False)
-        # 直接 UPDATE
-        is_success = await RoleRepository.update_role(role_id, update_data, data.menu_ids, session)
-        # 如果更新成功
-        if is_success:
-            return BoolResult(success=True)
-        # 失败 → 补查（区分不存在 vs 幂等）
-        exists = await RoleRepository.exists(role_id, session)
-        if not exists:
+        # 执行更新
+        is_success = await RoleRepository.update_role(role_id, update_data, data.permission_ids, session)
+        if not is_success:
             raise BusinessException(Code.ROLE_NOT_FOUND, "角色不存在")
-        # 存在但没更新成功
-        return BoolResult(success=False)
+        return BoolResult(success=True)
 
 
     @staticmethod
     async def delete_role(role_id: int, session: AsyncSession) -> BoolResult:
-        # 直接 UPDATE
+        # 执行删除
         is_success = await RoleRepository.delete_role(role_id, session)
-        # 如果更新成功
-        if is_success:
-            return BoolResult(success=True)
-        # 失败 → 补查（区分不存在 vs 幂等）
-        exists = await RoleRepository.exists(role_id, session)
-        if not exists:
-            raise BusinessException(Code.ROLE_NOT_FOUND, "角色不存在")
-        # 存在但没删除成功
-        return BoolResult(success=False)
+        if not is_success:
+            raise BusinessException(Code.PERMISSION_NOT_FOUND, "数据不存在")
+        return BoolResult(success=True)
 
 
     @staticmethod
-    async def get_role_by_id(role_id: int, session: AsyncSession) -> RoleRead | None:
+    async def get_role_by_id(role_id: int, session: AsyncSession) -> RoleRead:
         role = await RoleRepository.get_role_by_id(role_id, session)
         if not role:
             raise BusinessException(Code.ROLE_NOT_FOUND, "角色不存在")
-        return RoleRead.model_validate(role) if role else None
+        data = RoleMapper.to_read_entity(role)
+        return data
 
 
     @staticmethod
     async def get_role_list(session: AsyncSession) -> List[RoleList]:
         roles = await RoleRepository.get_role_list(session)
         items = [
-            RoleList.model_validate(r) for r in roles
+            RoleMapper.to_list_entity(u) for u in roles
         ]
         return items
 
 
     @staticmethod
-    async def get_role_page(params: RolePageQueryParams, session: AsyncSession) -> PageResult[RolePage]:
+    async def get_role_page(params: RolePageQueryParams, session: AsyncSession) -> PageResult[RoleRead]:
         total, roles = await RoleRepository.get_role_page(params, session)
         items = [
-            RolePage.model_validate(r) for r in roles
+            RoleMapper.to_read_entity(u) for u in roles
         ]
         return PageResult(
             total=total,

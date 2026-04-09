@@ -3,10 +3,10 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions.codes import Code
 from app.exceptions.business import BusinessException
-from app.models.rbac import User
+from app.mappers.user_mapper import UserMapper
 from app.repositorys.user_repo import UserRepository
 from app.schemas.common import PageResult, IDResult, BoolResult
-from app.schemas.user import UserCreate, UserUpdate, UserRead, UserPageQueryParams, UserList, UserPage, CurrentUser
+from app.schemas.user import UserCreate, UserUpdate, UserRead, UserPageQueryParams, UserList, CurrentUser
 from app.exceptions.business import AuthException
 from app.core.security import verify_password, create_access_token
 from app.schemas.user import UserLogin
@@ -46,19 +46,13 @@ class UserService:
             raise AuthException(Code.LOGIN_FAILED, "操作失败，请联系管理员或稍后重试")
         return BoolResult(success=True)
 
+
     @staticmethod
-    async def get_current_user(user_id: int, session: AsyncSession) -> CurrentUser | None:
+    async def get_current_user(user_id: int, session: AsyncSession) -> CurrentUser:
         user = await UserRepository.get_current_user(user_id, session)
         if not user:
-            return None
-        data = CurrentUser(
-            id=user.id,
-            username=user.username,
-            email=user.email,
-            phone=user.phone,
-            token_version=user.token_version,
-            roles=[r.code for r in user.roles]
-        )
+            raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
+        data = UserMapper.to_current_user_entity(user)
         return data
 
 
@@ -68,75 +62,66 @@ class UserService:
         if existing:
             raise BusinessException(Code.USER_ALREADY_EXISTS, "用户已经存在")
         hashed_password = pwd_context.hash(data.password)
-        user = User(username=data.username, password=hashed_password, email=data.email, phone=data.phone)
+        data.password = hashed_password
+        # DTO → Entity
+        user = UserMapper.to_create_entity(data)
         user_id = await UserRepository.create_user(user, data.role_ids, session)
         return IDResult(id=user_id)
 
 
     @staticmethod
     async def update_user(user_id: int, data: UserUpdate, session: AsyncSession) -> BoolResult:
-        # 提取更新字段
-        update_data = data.model_dump(exclude_unset=True, exclude={"role_ids"})
+        # DTO → update dict
+        update_data = UserMapper.to_update_dict(data)
         if not update_data:
             return BoolResult(success=False)
-        # 直接 UPDATE
+        # 执行更新
         is_success = await UserRepository.update_user(user_id, update_data, data.role_ids, session)
-        # 如果更新成功
-        if is_success:
-            return BoolResult(success=True)
-        # 失败 → 补查（区分不存在 vs 幂等）
-        exists = await UserRepository.exists(user_id, session)
-        if not exists:
+        if not is_success:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        # 存在但没更新成功
-        return BoolResult(success=False)
+        return BoolResult(success=True)
 
 
     @staticmethod
     async def delete_user(user_id: int, session: AsyncSession) -> BoolResult:
-        # 直接 UPDATE
         is_success = await UserRepository.delete_user(user_id, session)
-        # 如果更新成功
-        if is_success:
-            return BoolResult(success=True)
-        # 失败 → 补查（区分不存在 vs 幂等）
-        exists = await UserRepository.exists(user_id, session)
-        if not exists:
+        if not is_success:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        # 存在但没删除成功
-        return BoolResult(success=False)
+        return BoolResult(success=True)
 
 
     @staticmethod
-    async def get_user_by_id(user_id: int, session: AsyncSession) -> UserRead | None:
+    async def get_user_by_id(user_id: int, session: AsyncSession) -> UserRead:
         user = await UserRepository.get_user_by_id(user_id, session)
         if not user:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        return UserRead.model_validate(user) if user else None
+        data = UserMapper.to_read_entity(user)
+        return data
 
 
     @staticmethod
-    async def get_user_by_name(username: str, session: AsyncSession) -> UserRead | None:
+    async def get_user_by_name(username: str, session: AsyncSession) -> UserRead:
         user = await UserRepository.get_user_by_username(username, session)
         if not user:
             raise BusinessException(Code.USER_NOT_FOUND, "用户不存在")
-        return UserRead.model_validate(user) if user else None
+        data = UserMapper.to_read_entity(user)
+        return data
 
 
     @staticmethod
     async def get_user_list(session: AsyncSession) -> List[UserList]:
         users = await UserRepository.get_user_list(session)
         items = [
-            UserList.model_validate(u) for u in users
+            UserMapper.to_list_entity(u) for u in users
         ]
         return items
 
 
     @staticmethod
-    async def get_user_page(params: UserPageQueryParams, session: AsyncSession) -> PageResult[UserPage]:
+    async def get_user_page(params: UserPageQueryParams, session: AsyncSession) -> PageResult[UserRead]:
         total, users = await UserRepository.get_user_page(params, session)
         items = [
-            UserPage.model_validate(u) for u in users
+            UserMapper.to_read_entity(u) for u in users
         ]
         return PageResult(
             total=total,

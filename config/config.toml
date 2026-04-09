@@ -1,5 +1,5 @@
 [app]
-name = "python-fastapi-admin"
+name = "fastapi-admin"
 env = "dev"
 host = "127.0.0.1"
 port = 8003
@@ -14,7 +14,7 @@ user = "root"
 password = "123456"
 host = "localhost"
 port = 3306
-database = "python_fastapi_admin"
+database = "fastapi_admin"
 echo = true # 线下环境设置成true，线上环境改为false
 pool_size = 10
 max_overflow = 20

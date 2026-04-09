@@ -40,7 +40,7 @@ class UserRepository:
         )
 
         # 如果用户不存在，直接返回
-        if result.rowcount == 0:
+        if result.rowcount <= 0:
             return False
         # 删除旧角色（中间表）
         await session.execute(
@@ -158,7 +158,6 @@ class UserRepository:
         # 动态条件
         if params.username:
             stmt = stmt.where(User.username.contains(params.username))
-
         if params.is_active is not None:
             stmt = stmt.where(User.is_active == params.is_active)
 

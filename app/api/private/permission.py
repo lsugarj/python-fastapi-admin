@@ -5,7 +5,7 @@ from app.db.session import get_session, get_read_session
 from app.api.deps import require_role
 from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
-from app.schemas.permission import PermissionCreate, PermissionPageQueryParams, PermissionUpdate, PermissionPage, \
+from app.schemas.permission import PermissionCreate, PermissionPageQueryParams, PermissionUpdate, \
     PermissionList, PermissionRead
 from app.services.permission_service import PermissionService
 
@@ -58,7 +58,7 @@ async def get_permission_list(
     return Response.success(data=page_result)
 
 
-@router.get("/pages", response_model=ResponseModel[PageResult[PermissionPage]])
+@router.get("/pages", response_model=ResponseModel[PageResult[PermissionRead]])
 async def get_permission_page(
     params: PermissionPageQueryParams = Depends(),
     session: AsyncSession = Depends(get_read_session),

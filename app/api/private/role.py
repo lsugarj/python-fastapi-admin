@@ -5,7 +5,7 @@ from app.db.session import get_session, get_read_session
 from app.api.deps import require_role
 from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
-from app.schemas.role import RoleCreate, RoleUpdate, RoleRead, RoleList, RolePage, RolePageQueryParams
+from app.schemas.role import RoleCreate, RoleUpdate, RoleRead, RoleList, RolePageQueryParams
 from app.services.role_service import RoleService
 
 router = APIRouter(prefix="/private/roles", dependencies=[Depends(require_role("admin"))])
@@ -56,7 +56,7 @@ async def get_role_list(
     return Response.success(data=page_result)
 
 
-@router.get("/pages", response_model=ResponseModel[PageResult[RolePage]])
+@router.get("/pages", response_model=ResponseModel[PageResult[RoleRead]])
 async def get_role_page(
     params: RolePageQueryParams = Depends(),
     session: AsyncSession = Depends(get_read_session),

@@ -5,7 +5,7 @@ from app.db.session import get_session, get_read_session
 from app.api.deps import require_role
 from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
-from app.schemas.menu import MenuCreate, MenuPageQueryParams, MenuUpdate, MenuPage, \
+from app.schemas.menu import MenuCreate, MenuPageQueryParams, MenuUpdate, \
     MenuList, MenuRead
 from app.services.menu_service import MenuService
 
@@ -58,7 +58,7 @@ async def get_menu_list(
     return Response.success(data=page_result)
 
 
-@router.get("/pages", response_model=ResponseModel[PageResult[MenuPage]])
+@router.get("/pages", response_model=ResponseModel[PageResult[MenuRead]])
 async def get_menu_page(
     params: MenuPageQueryParams = Depends(),
     session: AsyncSession = Depends(get_read_session),

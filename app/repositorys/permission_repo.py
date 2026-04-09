@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, delete
+from sqlalchemy import select, update, func
 from app.models.rbac import Permission
 from app.schemas.permission import PermissionPageQueryParams
 
@@ -18,8 +18,7 @@ class PermissionRepository:
     async def update_permission(permission_id: int, update_data: dict, session: AsyncSession) -> bool:
         """
         返回：
-        True  → 更新成功
-        False → 没有匹配行（可能不存在 or 值相同）
+        int → 影响行数（rowcount）
         """
         stmt = (
             update(Permission)
@@ -89,6 +88,8 @@ class PermissionRepository:
         stmt = select(Permission)
 
         # 动态条件
+        if params.code:
+            stmt = stmt.where(Permission.code.contains(params.code))
         if params.name:
             stmt = stmt.where(Permission.name.contains(params.name))
         if params.path:

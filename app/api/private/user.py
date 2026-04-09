@@ -5,7 +5,7 @@ from app.db.session import get_session, get_read_session
 from app.api.deps import get_current_user, delete_current_user_cache
 from app.schemas.response import ResponseModel, Response
 from app.schemas.common import IDResult, PageResult, BoolResult
-from app.schemas.user import UserCreate, UserRead, UserPageQueryParams, UserList, UserUpdate, CurrentUser, UserPage
+from app.schemas.user import UserCreate, UserRead, UserPageQueryParams, UserList, UserUpdate, CurrentUser
 from app.services.user_service import UserService
 from fastapi import Request
 
@@ -74,7 +74,7 @@ async def get_user_list(
     return Response.success(data=page_result)
 
 
-@router.get("/pages", response_model=ResponseModel[PageResult[UserPage]])
+@router.get("/pages", response_model=ResponseModel[PageResult[UserRead]])
 async def get_user_page(
     params: UserPageQueryParams = Depends(),
     session: AsyncSession = Depends(get_read_session),

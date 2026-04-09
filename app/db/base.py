@@ -1,11 +1,19 @@
 from datetime import datetime, UTC
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import DateTime, func
+from sqlalchemy import MetaData, DateTime, func
 
 
 class Base(DeclarativeBase):
-    pass
-
+    # 统一命名规则（非常重要，Alembic 不会乱 diff）
+    metadata = MetaData(
+        naming_convention={
+            "pk": "pk_%(table_name)s",
+            "fk": "fk_%(table_name)s_%(column_0_name)s",
+            "uq": "uk_%(table_name)s_%(column_0_name)s",
+            "ix": "idx_%(table_name)s_%(column_0_name)s",
+            "ck": "ck_%(table_name)s_%(constraint_name)s",
+        }
+    )
 
 # =========================
 # 时间字段 Mixin

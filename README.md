@@ -1,4 +1,4 @@
-# python-fastapi-admin
+# fastapi-admin
 
 一个面向“快速落地后台接口”的 FastAPI 项目骨架：自带统一响应结构、统一异常处理、请求链路 TraceId、结构化日志、Prometheus 指标、OpenTelemetry 链路追踪、Redis 缓存与清晰的分层目录，适合小白上手和团队推广。
 
@@ -11,8 +11,8 @@
 - Prometheus 指标：内置 metrics middleware + `/metrics` 暴露 Prometheus 指标
 - OpenTelemetry：内置 FastAPI 自动埋点，支持 OTLP gRPC exporter
 - Redis 缓存：当前用户信息缓存 + 单点登录校验（token_version）
-- 清晰架构：api / services / repositorys / models / schemas / core / middlewares / exceptions
-- 权限扩展点：通过依赖注入实现 “未登录/无权限” 的标准返回与 RBAC 入口
+- 清晰架构：api / services / repositorys / mappers / models / schemas / core / middlewares / exceptions
+- 权限扩展点：通过依赖注入实现 “未登录/无权限” 的标准返回与 RBAC 入口（角色/权限）
 
 ## 快速开始（小白 3 步跑起来）
 
@@ -51,6 +51,11 @@ gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:8080
 - `GET /healthz` -> `{"status":"ok"}`
 - `GET /metrics` -> Prometheus 指标（文本格式）
 
+接口文档：
+
+- `GET /docs` -> Swagger UI
+- `GET /redoc` -> ReDoc
+
 ## 项目架构（读完就能改）
 
 ### 分层说明
@@ -63,16 +68,17 @@ gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:8080
   - `public/`：公开接口（例如登录）
   - `private/`：需要登录才能访问的接口（通过 dependencies 保护）
 - `app/services/`：业务编排（做“业务规则”，不直接写 SQL）
-- `app/repositorys/`：数据访问层（写 SQLModel/SQLAlchemy 查询）
+- `app/repositorys/`：数据访问层（写 SQLAlchemy 查询）
+- `app/mappers/`：DTO/Schema 与 ORM Entity 的转换（Create/Update 的字段白名单也在这里收敛）
 - `app/models/`：ORM 模型
-- `app/schemas/`：请求/响应 Schema（Pydantic/SQLModel）
+- `app/schemas/`：请求/响应 Schema（Pydantic v2）
 - `app/utils/`：通用工具（context/校验等）
 
 ### 请求流（从进来到出去）
 
 1. `trace_middleware`：提取/生成 `trace_id`（header 优先，其次 span trace_id，最后 uuid）并写入上下文 + 回写响应头
-2. `metrics_middleware`：统计请求数/耗时/异常数/并发数（Prometheus）
-3. `logging_middleware`：记录 access_log（method/path/status/duration_ms/user_id）
+2. `logging_middleware`：记录 access_log（method/path/status/duration_ms/client_ip 等）
+3. `metrics_middleware`：统计请求数/耗时/异常数/并发数（Prometheus）
 4. 路由处理：`api -> service -> repository -> db`
 5. 异常统一落地：`app/exceptions/handlers.py` 输出统一 `Response.fail`
 6. `Response` 自动填充 `trace_id`：默认从上下文获取
@@ -81,7 +87,7 @@ gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:8080
 
 ```
 Client
-  -> Middlewares(trace -> metrics -> logging)
+  -> Middlewares(trace -> logging -> metrics)
   -> Router(api/public & api/private)
   -> Service
   -> Repository
@@ -114,12 +120,36 @@ token 里包含：
 
 如果你新增私有接口，建议放在 `app/api/private/` 并加 `Depends(get_current_user)` 或更细粒度的 `require_role/require_permission`。
 
+### RBAC 数据模型（当前实现）
+
+- 用户 User ↔ 角色 Role：多对多（`user_role`）
+- 角色 Role ↔ 权限 Permission：多对多（`role_permission`）
+- 菜单 Menu：树结构（`parent_id`）+ 可绑定权限（`permission_id`）
+
+对应 ORM 定义见：[rbac.py](file:///Users/lj/projects/fastapi-admin/app/models/rbac.py)
+
 ### 常用接口示例
 
 - 登录：`POST /api/public/user/login`
 - 当前登录用户：`GET /api/private/users/me`
 - 用户分页：`GET /api/private/users/pages?page=1&size=10`
 - 权限分页：`GET /api/private/permissions/pages?page=1&size=10`
+- 角色分页：`GET /api/private/roles/pages?page=1&size=10`
+- 菜单分页：`GET /api/private/menus/pages?page=1&size=10`
+
+## 更新语义（PATCH：不传不更新）
+
+本项目对更新接口采用 PATCH 语义：服务层会对请求体执行 `model_dump(exclude_unset=True)`，因此：
+
+- 字段不传：不会出现在 update dict 里，不更新数据库
+- 字段传空字符串 `""`：会出现在 update dict 里，会更新为 `""`
+- 字段传 `null`：会出现在 update dict 里，会更新为 `NULL`（前提是数据库字段可空）
+
+以菜单为例：`PATCH /api/private/menus/detail/{menu_id}`
+
+- 不更新 icon/path：只提交你要改的字段（例如 `{"name":"menu"}`）
+- icon 更新为空字符串：提交 `{"icon": ""}`
+
 
 ## 日志怎么用
 
@@ -132,7 +162,6 @@ logger = get_logger(__name__)
 logger.info("create user", extra={"user_id": user_id})
 logger.warning("permission denied")
 logger.exception("system error")
-```
 
 日志配置在 `[logging]`：
 
@@ -173,4 +202,9 @@ poetry run pytest -q
 - 401/403/404/422 不是“随机报错”：项目采用统一异常处理，返回体里看 `code/message/error/trace_id`（错误码在 `app/exceptions/codes.py`）
 - `trace_id` 为 `-`：检查请求是否经过 trace 中间件，以及是否传入 `X-Trace-Id`
 - 数据库连不上：确认 `config/config.toml` 的 `[database]` 配置与 MySQL 可用
-- Docker 构建失败：如果你的 Dockerfile 依赖 `requirements.txt`，需要先在本地生成（或改用 Poetry 镜像方案）
+- Docker 构建失败：Dockerfile 依赖 `requirements.txt`，需要先生成再构建
+
+```bash
+poetry export -f requirements.txt --without-hashes -o requirements.txt
+docker build -t fastapi-admin .
+```

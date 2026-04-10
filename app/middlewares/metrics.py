@@ -1,45 +1,48 @@
 import time
 from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.core.metrics import (
     REQUEST_COUNT,
-    REQUEST_LATENCY,
     IN_PROGRESS,
     EXCEPTION_COUNT,
+    observe_latency_with_trace,  # 用这个
 )
 
-async def metrics_middleware(request: Request, call_next):
-    method = request.method
-    path = request.url.path
+class MetricsMiddleware(BaseHTTPMiddleware):
 
-    IN_PROGRESS.inc()
-    start_time = time.time()
+    async def dispatch(self, request: Request, call_next):
+        method = request.method
 
-    try:
-        response = await call_next(request)
-        status_code = response.status_code
+        route = request.scope.get("route")
+        path = route.path if route else request.url.path
 
-        REQUEST_COUNT.labels(
-            method=method,
-            path=path,
-            status=status_code
-        ).inc()
+        IN_PROGRESS.inc()
+        start_time = time.time()
 
-        return response
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
 
-    except Exception as e:
-        EXCEPTION_COUNT.labels(
-            method=method,
-            path=path,
-            exception=type(e).__name__,
-        ).inc()
-        raise
+            REQUEST_COUNT.labels(
+                method=method,
+                path=path,
+                status=status_code
+            ).inc()
 
-    finally:
-        duration = time.time() - start_time
+            return response
 
-        REQUEST_LATENCY.labels(
-            method=method,
-            path=path
-        ).observe(duration)
+        except Exception as e:
+            EXCEPTION_COUNT.labels(
+                method=method,
+                path=path,
+                exception=type(e).__name__,
+            ).inc()
+            raise
 
-        IN_PROGRESS.dec()
+        finally:
+            duration = time.time() - start_time
+
+            observe_latency_with_trace(method, path, duration)
+
+            IN_PROGRESS.dec()

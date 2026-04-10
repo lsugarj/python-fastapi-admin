@@ -1,13 +1,36 @@
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from logging.handlers import TimedRotatingFileHandler
 import re
-from app.core.config import get_settings
-from app.core.context import get_trace_id
 
-logging_config = get_settings().logging
+from opentelemetry import trace
+
+from app.core.config import get_settings
+
+settings = get_settings()
+logging_config = settings.logging
+
+
+# =========================
+# Trace Context 注入（核心）
+# =========================
+class TraceContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        span = trace.get_current_span()
+        ctx = span.get_span_context()
+
+        if ctx.is_valid:
+            record.trace_id = format(ctx.trace_id, "032x")
+            record.span_id = format(ctx.span_id, "016x")
+            record.trace_flags = int(ctx.trace_flags)
+        else:
+            record.trace_id = ""
+            record.span_id = ""
+            record.trace_flags = 0
+
+        return True
 
 
 # =========================
@@ -15,9 +38,9 @@ logging_config = get_settings().logging
 # =========================
 class JsonFormatter(logging.Formatter):
     ALLOWED_FIELDS = {
-        "method",
-        "path",
-        "status",
+        "http.method",
+        "http.target",
+        "http.status_code",
         "duration_ms",
         "client_ip",
         "user_id",
@@ -25,16 +48,24 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
-            "trace_id": get_trace_id(),
+
+            # OTel 标准字段
+            "trace_id": getattr(record, "trace_id", ""),
+            "span_id": getattr(record, "span_id", ""),
+            "trace_flags": getattr(record, "trace_flags", 0),
+
             "logger": record.name,
             "module": record.module,
             "line": record.lineno,
+
+            # 服务标识（建议加）
+            "service.name": settings.app.name,
         }
 
-        # 只保留你关心的字段
+        # 只保留白名单字段（防止日志膨胀）
         for key in self.ALLOWED_FIELDS:
             if hasattr(record, key):
                 log[key] = getattr(record, key)
@@ -54,11 +85,9 @@ class SizeAndTimeRotatingHandler(TimedRotatingFileHandler):
         self.max_bytes = max_bytes
 
     def shouldRollover(self, record):
-        # 时间触发
         if super().shouldRollover(record):
             return 1
 
-        # 大小触发
         if self.stream is None:
             self.stream = self._open()
 
@@ -68,11 +97,10 @@ class SizeAndTimeRotatingHandler(TimedRotatingFileHandler):
         return 0
 
 
+# =========================
+# 工具函数
+# =========================
 def _parse_size(size: str) -> int:
-    """
-    支持：
-    10KB / 50MB / 1GB
-    """
     size = size.strip().upper()
     match = re.match(r"^(\d+)(KB|MB|GB)?$", size)
 
@@ -93,10 +121,11 @@ def _parse_size(size: str) -> int:
 
 
 # =========================
-# Handler 创建
+# Handler 构建
 # =========================
 def _build_handler(filename: str, level: int):
     max_bytes = _parse_size(logging_config.max_bytes)
+
     handler = SizeAndTimeRotatingHandler(
         filename=os.path.join(logging_config.dir, filename),
         when="midnight",
@@ -108,6 +137,10 @@ def _build_handler(filename: str, level: int):
 
     handler.setLevel(level)
     handler.setFormatter(JsonFormatter())
+
+    # ✅ 注入 trace context
+    handler.addFilter(TraceContextFilter())
+
     return handler
 
 
@@ -115,19 +148,16 @@ def _build_handler(filename: str, level: int):
 # 初始化日志系统
 # =========================
 def init_logging():
-    # 创建日志目录
     os.makedirs(logging_config.dir, exist_ok=True)
-    # 定义handlers
-    logging.root.handlers = []
-    # app 日志
-    app_handler = _build_handler("app.log", logging.INFO)
 
-    # error 日志
+    logging.root.handlers = []
+
+    app_handler = _build_handler("app.log", logging.INFO)
     error_handler = _build_handler("error.log", logging.ERROR)
 
-    # console（容器推荐）
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(JsonFormatter())
+    console_handler.addFilter(TraceContextFilter())
 
     logging.basicConfig(
         level=logging.INFO,

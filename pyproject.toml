@@ -1,7 +1,7 @@
 [project]
-name = "python-fastapi-admin"
+name = "fastapi-admin"
 version = "0.1.0"
-description = "python fastapi admin"
+description = "fastapi admin"
 authors = [
     {name = "lsugarj"}
 ]

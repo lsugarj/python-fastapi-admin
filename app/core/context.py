@@ -1,25 +1,21 @@
-from contextvars import ContextVar
-import uuid
-
-_trace_id: ContextVar[str] = ContextVar("trace_id", default="-")
-_span_id: ContextVar[str] = ContextVar("span_id", default="-")
+from opentelemetry import trace
 
 
-def set_trace_id(trace_id: str = None):
-    trace_id = trace_id or str(uuid.uuid4())
-    _trace_id.set(trace_id)
-    return trace_id
+def get_trace_id() -> str:
+    span = trace.get_current_span()
+    ctx = span.get_span_context()
+
+    if not ctx.is_valid:
+        return ""
+
+    return format(ctx.trace_id, "032x")
 
 
-def get_trace_id():
-    return _trace_id.get()
+def get_span_id() -> str:
+    span = trace.get_current_span()
+    ctx = span.get_span_context()
 
+    if not ctx.is_valid:
+        return ""
 
-def set_span_id(span_id: str = None):
-    span_id = span_id or str(uuid.uuid4())[:8]
-    _span_id.set(span_id)
-    return span_id
-
-
-def get_span_id():
-    return _span_id.get()
+    return format(ctx.span_id, "016x")
